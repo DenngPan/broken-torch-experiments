@@ -20,7 +20,7 @@ opt = {
    useDevice = 1,
    -- Epoch sizes
    trainEpochSize = 10,
-   batchSize = 128,
+   batchSize = 16,
    machEpoch = 100,
    maxTries = 30,
    -- Accumulate gradients in place?
@@ -102,64 +102,57 @@ model:add(nn.LogSoftMax())
 -- input = torch.randn(1,3, 224,224)
 -- print(model:forward(input):size())
 
---model:add(nn.SpatialConvolution(64,192, 3,3,1,1))
+----- Trying again with alexnet
+local features = nn.Concat(2)
+local fb1 = nn.Sequential() -- branch 1
+fb1:add(nn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
+fb1:add(nn.ReLU())
+fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
 
--- local features = nn.Concat(2)
--- local fb1 = nn.Sequential() -- branch 1
--- fb1:add(nn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
--- fb1:add(nn.ReLU())
--- if opt.LCN then
---    fb1:add(inn.SpatialCrossResponseNormalization(5, 0.0001, 0.75, 2))
--- end
--- fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
---
--- fb1:add(nn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
--- fb1:add(nn.ReLU())
--- if opt.LCN then
---    fb1:add(inn.SpatialCrossResponseNormalization(5, 0.0001, 0.75, 2))
--- end
--- fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
---
--- fb1:add(nn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
--- fb1:add(nn.ReLU())
---
--- fb1:add(nn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
--- fb1:add(nn.ReLU())
---
--- fb1:add(nn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
--- fb1:add(nn.ReLU())
---
--- fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
---
--- local fb2 = fb1:clone() -- branch 2
--- for k,v in ipairs(fb2:findModules('nn.SpatialConvolution')) do
---    v:reset() -- reset branch 2's weights
--- end
---
--- features:add(fb1)
--- features:add(fb2)
---
--- -- 1.3. Create Classifier (fully connected layers)
--- local classifier = nn.Sequential()
--- classifier:add(nn.Copy(nil, nil, true)) -- prevents a newContiguous in SpatialMaxPooling:backward()
--- classifier:add(nn.View(256*6*6))
--- classifier:add(nn.Dropout(0.5))
--- classifier:add(nn.Linear(256*6*6, 4096))
--- classifier:add(nn.Threshold(0, 1e-6))
---
--- classifier:add(nn.Dropout(0.5))
--- classifier:add(nn.Linear(4096, 4096))
--- classifier:add(nn.Threshold(0, 1e-6))
---
--- classifier:add(nn.Linear(4096, 1000))
--- classifier:add(nn.LogSoftMax())
---
--- -- 1.4. Combine 1.1 and 1.3 to produce final model
--- model = nn.Sequential()
--- model:add(nn.Convert(),1)
--- model:add(features)
--- model:add(classifier)
---
+fb1:add(nn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
+fb1:add(nn.ReLU())
+fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
+
+fb1:add(nn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(nn.ReLU())
+
+fb1:add(nn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(nn.ReLU())
+
+fb1:add(nn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(nn.ReLU())
+
+fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
+
+local fb2 = fb1:clone() -- branch 2
+for k,v in ipairs(fb2:findModules('nn.SpatialConvolution')) do
+   v:reset() -- reset branch 2's weights
+end
+
+features:add(fb1)
+features:add(fb2)
+
+-- 1.3. Create Classifier (fully connected layers)
+local classifier = nn.Sequential()
+classifier:add(nn.Copy(nil, nil, true)) -- prevents a newContiguous in SpatialMaxPooling:backward()
+classifier:add(nn.View(256*6*6))
+classifier:add(nn.Dropout(0.5))
+classifier:add(nn.Linear(256*6*6, 4096))
+classifier:add(nn.Threshold(0, 1e-6))
+
+classifier:add(nn.Dropout(0.5))
+classifier:add(nn.Linear(4096, 4096))
+classifier:add(nn.Threshold(0, 1e-6))
+
+classifier:add(nn.Linear(4096, 1000))
+classifier:add(nn.LogSoftMax())
+
+-- 1.4. Combine 1.1 and 1.3 to produce final model
+model = nn.Sequential()
+model:add(nn.Convert(),1)
+model:add(features)
+model:add(classifier)
+
 
 --[[data]]--
 --- ds = dp.ImageNet{
@@ -181,22 +174,22 @@ criterion = nn.ClassNLLCriterion()
 weights,gradients = model:getParameters()
 
 sgd_state = {
-   learningRate = 1e-3,
+   learningRate = 0.01,
    learningRateDecay = 0,
    weightDecay = 0,
-   momentum = 0.9,
-   dampening = 0.9,
+   momentum = 0,
+   dampening = 0,
    nesterov = false,
    learningRates = nil,
    weightDecays = nil,
 }
 
+batch = ds:sample(opt.batchSize)
+ppf(batch)
+inputs = batch:inputs():input()
+targets = batch:targets():input()
 
 function fx()
-   local batch = ds:sample(opt.batchSize)
-   ppf(batch)
-   local inputs = batch:inputs():input()
-   local targets = batch:targets():input()
 
    model:zeroGradParameters()
    -- model:syncParameters() -- only for DataParallelTable
@@ -210,21 +203,22 @@ function fx()
    model:backward(inputs, df_dw)
    local backward_time = timer:time().real
 
-   print("Forward: ", xlua.formatTime(forward_time/opt.batchSize), " Backward: ", xlua.formatTime(backward_time/opt.batchSize))
+   print("(per-image) Forward:", xlua.formatTime(forward_time/opt.batchSize), "Backward:", xlua.formatTime(backward_time/opt.batchSize))
 
    -- Normalize gradients and loss
-   gradients.div(inputs:size(1))
-   loss = loss / inputs:size(1)
+   --gradients:div(opt.batchSize)
+   --loss = loss / opt.batchSize
 
    return loss, gradients
 end
 
 
-batch = ds:sample(10)
-inputs = batch:inputs():input()
+-- batch = ds:sample(10)
+-- inputs = batch:inputs():input()
 
 model:float()
 criterion:float()
+
 
 
 -- model:float()
@@ -300,3 +294,50 @@ criterion:float()
 -- print(model)
 --
 -- xp:run(ds)
+
+-- clear the intermediate states in the model before saving to disk
+-- this saves lots of disk space
+function sanitize(net)
+   local list = net:listModules()
+   for _,val in ipairs(list) do
+         for name,field in pairs(val) do
+            if torch.type(field) == 'cdata' then val[name] = nil end
+            if name == 'homeGradBuffers' then val[name] = nil end
+            if name == 'input_gpu' then val[name] = {} end
+            if name == 'input' then val[name] = {} end
+            if name == 'finput' then val[name] = {} end
+            if name == 'gradOutput_gpu' then val[name] = {} end
+            if name == 'gradOutput' then val[name] = {} end
+            if name == 'fgradOutput' then val[name] = {} end
+            if name == 'gradInput_gpu' then val[name] = {} end
+            if name == 'gradInput' then val[name] = {} end
+            if name == 'fgradInput' then val[name] = {} end
+            if (name == 'output' or name == 'gradInput') then
+               val[name] = field.new()
+            end
+         end
+   end
+end
+
+
+function inspect(model)
+   local list = model:listModules()
+   local fields = {}
+   for i, module in ipairs(list) do
+      print("Module "..i.."------------")
+      for n,val in pairs(module) do
+         local str
+         if torch.isTensor(val) then
+            str = torch.typename(val).." of size "..val:numel()
+         else
+            str = tostring(val)
+         end
+         table.insert(fields,n)
+         print("    "..n..": "..str)
+      end
+   end
+
+   print("Unique fields:")
+   print(_.uniq(fields))
+end
+--inspect(model)
