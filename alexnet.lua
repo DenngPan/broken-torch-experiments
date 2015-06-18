@@ -222,7 +222,7 @@ exp = TrainHelpers.ExperimentHelper{
 exp:printEpochProgress{everyNBatches = 1}
 exp:printAverageTrainLoss{everyNBatches = 10}
 exp:snapshotModel{
-   everyNBatches = 10,
+   everyNBatches = 1,
    filename="alexnet-%s.t7"
 }
 exp:trainEpoch()

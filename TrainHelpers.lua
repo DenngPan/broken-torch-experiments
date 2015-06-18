@@ -62,7 +62,7 @@ function ExperimentHelper:__init(config)
    self.lossLog = {}
    self.preprocessFunc = config.preprocessFunc
 
-   self.sgd_state = {
+   self.sgdState = {
       learningRate = config.learningRate,
       --learningRateDecay = 1e-7,
       --weightDecay = 1e-5,
@@ -112,7 +112,12 @@ function ExperimentHelper:snapshotModel(config)
                     local filename = string.format(config.filename, self.totalNumSeenImages)
                     print("Saving experiment state to", filename)
                     sanitize(self.model)
-                    torch.save(filename, self)
+                    torch.save(filename, {
+                        model=self.model,
+                        sgdState=self.sgdState,
+                        lossLog=self.lossLog
+                    })
+                     
                  end)
 end
 function ExperimentHelper:trainEpoch()
@@ -133,7 +138,7 @@ function ExperimentHelper:trainEpoch()
       new_w, l = optim.sgd(function()
                               return eval(batch:inputs():input(),
                                           batch:targets():input())
-                           end, weights, sgd_state)
+                           end, weights, sgdState)
       self.batchCounter = self.batchCounter + 1
       self.totalNumSeenImages = self.totalNumSeenImages + batch:targets():input():size(1)
       table.insert(self.lossLog, {loss=l[1], totalNumSeenImages=self.totalNumSeenImages})
