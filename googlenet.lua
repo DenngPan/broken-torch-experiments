@@ -21,9 +21,11 @@ opt = {
    batchSize = 16
 }
 
-opt.trainPath = (opt.trainPath == '') and paths.concat(opt.dataPath, 'ILSVRC2012_img_train') or opt.trainPath
-opt.validPath = (opt.validPath == '') and paths.concat(opt.dataPath, 'ILSVRC2012_img_val') or opt.validPath
-opt.metaPath = (opt.metaPath == '') and paths.concat(opt.dataPath, 'metadata') or opt.metaPath
+opt.trainPath = opt.trainPath or paths.concat(opt.dataPath, 'ILSVRC2012_img_train')
+opt.validPath = opt.validPath or paths.concat(opt.dataPath, 'ILSVRC2012_img_val')
+opt.metaPath = opt.metaPath or paths.concat(opt.dataPath, 'metadata')
+
+print(opt)
 
 
 --[[Model]]--
