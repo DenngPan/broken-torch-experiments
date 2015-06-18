@@ -4,31 +4,21 @@ require 'optim'
 opt = {
    -- Path to ImageNet
    dataPath = paths.concat(dp.DATA_DIR, 'ImageNet'),
-   nThread = 2,
-   -- overwrite cache?
+   -- overwrite cache? (SLOW! BE CAREFUL!)
    overwrite = false,
    -- Learning schedule parameters
    learningRate = 0.01,
-   schedule = {[1]=1e-2,[19]=5e-3,[30]=1e-3,[44]=5e-4,[53]=1e-4},
-   -- max norm each layers output neuron weights
-   maxOutNorm = -1,
+   --schedule = {[1]=1e-2,[19]=5e-3,[30]=1e-3,[44]=5e-4,[53]=1e-4},
    -- Weight decay
-   weightDecay = 5e-4,
+   --weightDecay = 5e-4,
    momentum = 0.9,
+   dampening = 0,
+   nesterov = true,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
-   -- Epoch sizes
-   trainEpochSize = 10,
-   batchSize = 16,
-   machEpoch = 100,
-   maxTries = 30,
-   -- Accumulate gradients in place?
-   accUpdate = false,
-   -- Reporting
-   verbose = true,
-   progress = true,
-
+   -- Batch size
+   batchSize = 16
 }
 
 opt.trainPath = (opt.trainPath == '') and paths.concat(opt.dataPath, 'ILSVRC2012_img_train') or opt.trainPath
@@ -95,249 +85,61 @@ model:add(buildInceptionLayer(832, 256, 160, 320, 32, 128, 128))
 model:add(buildInceptionLayer(832, 384, 192, 384, 48, 128, 128))
 model:add(nn.SpatialAveragePooling(7,7,1,1))
 model:add(nn.Dropout(0.4))
-model:add(nn.View( 1024))
+model:add(nn.Collapse(3))
 model:add(nn.Linear(1024, 1000))
 model:add(nn.LogSoftMax())
 
--- input = torch.randn(1,3, 224,224)
--- print(model:forward(input):size())
-
------ Trying again with alexnet
-local features = nn.Concat(2)
-local fb1 = nn.Sequential() -- branch 1
-fb1:add(nn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
-fb1:add(nn.ReLU())
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
-
-fb1:add(nn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
-fb1:add(nn.ReLU())
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
-
-fb1:add(nn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
-
-fb1:add(nn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
-
-fb1:add(nn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
-
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
-
-local fb2 = fb1:clone() -- branch 2
-for k,v in ipairs(fb2:findModules('nn.SpatialConvolution')) do
-   v:reset() -- reset branch 2's weights
-end
-
-features:add(fb1)
-features:add(fb2)
-
--- 1.3. Create Classifier (fully connected layers)
-local classifier = nn.Sequential()
-classifier:add(nn.Copy(nil, nil, true)) -- prevents a newContiguous in SpatialMaxPooling:backward()
-classifier:add(nn.View(256*6*6))
-classifier:add(nn.Dropout(0.5))
-classifier:add(nn.Linear(256*6*6, 4096))
-classifier:add(nn.Threshold(0, 1e-6))
-
-classifier:add(nn.Dropout(0.5))
-classifier:add(nn.Linear(4096, 4096))
-classifier:add(nn.Threshold(0, 1e-6))
-
-classifier:add(nn.Linear(4096, 1000))
-classifier:add(nn.LogSoftMax())
-
--- 1.4. Combine 1.1 and 1.3 to produce final model
-model = nn.Sequential()
-model:add(nn.Convert(),1)
-model:add(features)
-model:add(classifier)
-
-
 --[[data]]--
---- ds = dp.ImageNet{
----    train_path=opt.trainPath, valid_path=opt.validPath,
----    meta_path=opt.metaPath, verbose=opt.verbose,
----    cache_mode = opt.overwrite and 'overwrite' or nil
---- }
-
-cub = require 'cub200-2011'
-ds = cub.dataset
-
--- preprocessing function
-ppf = ds:normalizePPF()
+ds_all = dp.ImageNet{
+   train_path=opt.trainPath, valid_path=opt.validPath,
+   meta_path=opt.metaPath, verbose=opt.verbose,
+   cache_mode = opt.overwrite and 'overwrite' or nil
+}
+preprocess = ds_all:normalizePPF()
+ds_train = ds_all:loadTrain()
+ds_val = ds_all:loadValid()
 
 -- loss
 criterion = nn.ClassNLLCriterion()
 --confusion = optim.ConfusionMatrix(_.keys(ds:classes()))
 
-weights,gradients = model:getParameters()
+-- CUDA-ize
+if opt.cuda then
+   require 'cutorch'
+   require 'cunn'
+   cutorch.setDevice(opt.useDevice)
+   model:cuda()
+   criterion:cuda()
+   ds_train:cuda()
+   ds_valid:cuda()
+end
+
+weights,gradients = model:getParameters() -- be sure to do this AFTER CUDA-izing it!
 
 sgd_state = {
-   learningRate = 0.01,
-   learningRateDecay = 0,
-   weightDecay = 0,
-   momentum = 0,
+   learningRate = opt.learningRate,
+   --learningRateDecay = 1e-7,
+   --weightDecay = 1e-5,
+   momentum = 0.9,
    dampening = 0,
-   nesterov = false,
-   learningRates = nil,
-   weightDecays = nil,
+   nesterov = true,
 }
 
-batch = ds:sample(opt.batchSize)
-ppf(batch)
-inputs = batch:inputs():input()
-targets = batch:targets():input()
-
 function fx()
-
-   model:zeroGradParameters()
-   -- model:syncParameters() -- only for DataParallelTable
-   local timer = torch.Timer()
+   model:training()
+   local batch = ds_train:batch(opt.batchSize)
+   local inputs = batch:inputs():input():permute(1,4,2,3)
+   local targets = batch:targets():input()
+   gradients:zero() -- should i do this instead...?
    local y = model:forward(inputs)
    local loss = criterion:forward(y, targets)
-   local forward_time = timer:time().real
-
-   timer = torch.Timer()
    local df_dw = criterion:backward(y, targets)
    model:backward(inputs, df_dw)
-   local backward_time = timer:time().real
-
-   print("(per-image) Forward:", xlua.formatTime(forward_time/opt.batchSize), "Backward:", xlua.formatTime(backward_time/opt.batchSize))
-
-   -- Normalize gradients and loss
-   --gradients:div(opt.batchSize)
-   --loss = loss / opt.batchSize
-
    return loss, gradients
 end
 
-
--- batch = ds:sample(10)
--- inputs = batch:inputs():input()
-
-model:float()
-criterion:float()
-
-
-
--- model:float()
--- print(model:forward(inputs))
-
-
--- --[[Propagators]]--
--- train = dp.Optimizer{
---    acc_update = opt.accUpdate,
---    loss = nn.ModuleCriterion(nn.ClassNLLCriterion(), nil, nn.Convert()),
---    callback = function(model, report)
---                  print(report)
---                  --opt.learningRate = opt.schedule[report.epoch] or opt.learningRate
---                  --if opt.accUpdate then
---                  --   model:accUpdateGradParameters(model.dpnn_input, model.output, opt.learningRate)
---                  --else
---                  model:updateGradParameters(opt.momentum) -- affects gradParams
---                  model:weightDecay(opt.weightDecay) --affects gradParams
---                  model:updateParameters(opt.learningRate) -- affects params
---                  --end
---                  model:maxParamNorm(opt.maxOutNorm) -- affects params
---                  model:zeroGradParameters() -- affects gradParams
---    end,
---    feedback = dp.Confusion(),
---    sampler = dp.RandomSampler{
---       batch_size=opt.batchSize,
---       epoch_size=opt.trainEpochSize,
---       ppf=ppf
---    },
---    progress = opt.progress
--- }
--- valid = dp.Evaluator{
---    feedback = dp.TopCrop{n_top={1,5,10},n_crop=10,center=2},
---    sampler = dp.Sampler{
---       batch_size=math.round(opt.batchSize/10),
---       ppf=ppf
---    }
--- }
---
--- --[[multithreading]]--
--- if opt.nThread > 0 then
---    ds:multithread(opt.nThread)
---    train:sampler():async()
---    valid:sampler():async()
--- end
---
--- --[[Experiment]]--
--- xp = dp.Experiment{
---    model = model,
---    optimizer = train,
---    validator = valid,
---    observer = {
---       dp.FileLogger(),
---       dp.EarlyStopper{
---          error_report = {'validator','feedback','topcrop','all',5},
---          maximize = true,
---          max_epochs = opt.maxTries
---       }
---    },
---    random_seed = os.time(),
---    max_epoch = opt.maxEpoch
--- }
---
--- --[[GPU or CPU]]--
--- if opt.cuda then
---    require 'cutorch'
---    require 'cunn'
---    cutorch.setDevice(opt.useDevice)
---    xp:cuda()
--- end
---
--- print"Model :"
--- print(model)
---
--- xp:run(ds)
-
--- clear the intermediate states in the model before saving to disk
--- this saves lots of disk space
-function sanitize(net)
-   local list = net:listModules()
-   for _,val in ipairs(list) do
-         for name,field in pairs(val) do
-            if torch.type(field) == 'cdata' then val[name] = nil end
-            if name == 'homeGradBuffers' then val[name] = nil end
-            if name == 'input_gpu' then val[name] = {} end
-            if name == 'input' then val[name] = {} end
-            if name == 'finput' then val[name] = {} end
-            if name == 'gradOutput_gpu' then val[name] = {} end
-            if name == 'gradOutput' then val[name] = {} end
-            if name == 'fgradOutput' then val[name] = {} end
-            if name == 'gradInput_gpu' then val[name] = {} end
-            if name == 'gradInput' then val[name] = {} end
-            if name == 'fgradInput' then val[name] = {} end
-            if (name == 'output' or name == 'gradInput') then
-               val[name] = field.new()
-            end
-         end
-   end
+print "Training...."
+for i = 1,10 do
+    new_w, l = optim.sgd(fx, weights, sgd_state)
+    print("Loss", l[1])
 end
-
-
-function inspect(model)
-   local list = model:listModules()
-   local fields = {}
-   for i, module in ipairs(list) do
-      print("Module "..i.."------------")
-      for n,val in pairs(module) do
-         local str
-         if torch.isTensor(val) then
-            str = torch.typename(val).." of size "..val:numel()
-         else
-            str = tostring(val)
-         end
-         table.insert(fields,n)
-         print("    "..n..": "..str)
-      end
-   end
-
-   print("Unique fields:")
-   print(_.uniq(fields))
-end
---inspect(model)
