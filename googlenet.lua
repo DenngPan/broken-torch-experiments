@@ -1,6 +1,9 @@
 require 'dp'
 require 'optim'
 require 'cudnn'
+require 'ExperimentHelpers'
+require 'cutorch'
+require 'cunn'
 
 opt = {
    -- Path to ImageNet
@@ -177,13 +180,11 @@ ds_all = dp.ImageNet{
 
 -- CUDA-ize
 if opt.cuda then
-   require 'cutorch'
-   require 'cunn'
    cutorch.setDevice(opt.useDevice)
    model:cuda()
    loss:cuda()
+   print "Now on CUDA"
 end
-print "Now on CUDA"
 
 weights,gradients = model:getParameters() -- be sure to do this AFTER CUDA-izing it!
 function eval(inputs, targets)
@@ -204,39 +205,19 @@ end
 -- Set up dataset
 preprocess = ds_all:normalizePPF()
 ds_train = ds_all:loadTrain()
-ds_train:multithread(4)
 ds_val = ds_all:loadValid()
-sampler = dp.RandomSampler{batch_size = opt.batchSize,
-                           ppf = preprocess
-                        }
-sampler:async()
 
 -- Sample one epoch!
-epoch_sampler = sampler:sampleEpoch(ds_train)
-
-sgd_state = {
-   learningRate = opt.learningRate,
-   --learningRateDecay = 1e-7,
-   --weightDecay = 1e-5,
-   momentum = opt.momentum,
-   dampening = opt.dampening,
-   nesterov = opt.nesterov,
+exp = ExperimentHelpers.ExperimentHelper{
+   model = model,
+   trainDataset = ds_train,
+   batchSize = opt.batchSize,
+   preprocessFunc = preprocess,
+   learningRate = 0.01,
+   momentum = 0,
+   dampening = 0,
+   nesterov = true,
+   datasetMultithreadLoading = 4
 }
-
-print "Training...."
-while true do
-    batch, i, n = epoch_sampler(batch)
-    xlua.progress(i,n); print("")
-    collectgarbage(); collectgarbage()
-    if not batch then
-       print "Epoch Finished"
-       break
-    end
-   local inputs = batch:inputs():input()
-   local targets = batch:targets():input()
-   new_w, l = optim.sgd(function()
-                           return eval(batch:inputs():input(),
-                                       batch:targets():input())
-                        end, weights, sgd_state)
-    print("    Loss", l[1])
-end
+exp:printEpochProgressEvery()
+exp:trainEpoch()
