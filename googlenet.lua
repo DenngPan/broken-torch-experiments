@@ -61,7 +61,7 @@ print(opt)
 --    -- n.b.! since the convolutions have different sizes, many of these
 --    -- layers will be padded with zeros!
 -- end
--- 
+--
 -- model = nn.Sequential()
 -- model:add(nn.SpatialConvolution(3,64, 7,7,2,2, 3,3)) -- 224x224 -> 112x112
 -- model:add(nn.ReLU(true))
@@ -172,13 +172,6 @@ ds_all = dp.ImageNet{
    verbose=true,
    cache_mode = opt.overwrite and 'overwrite' or nil
 }
-print "Got imagenet"
-preprocess = ds_all:normalizePPF()
-print "Got preprocessor"
-ds_train = ds_all:loadTrain()
-print "Got train"
-ds_val = ds_all:loadValid()
-print "Got valid"
 
 
 -- CUDA-ize
@@ -192,23 +185,8 @@ end
 print "Now on CUDA"
 
 weights,gradients = model:getParameters() -- be sure to do this AFTER CUDA-izing it!
-print "Have gradients..."
-
-sgd_state = {
-   learningRate = opt.learningRate,
-   --learningRateDecay = 1e-7,
-   --weightDecay = 1e-5,
-   momentum = opt.momentum,
-   dampening = opt.dampening,
-   nesterov = opt.nesterov,
-}
-
-function fx()
+function eval(inputs, targets)
    model:training()
-   local batch = ds_train:sample(opt.batchSize)
-   preprocess(batch)
-   local inputs = batch:inputs():input()
-   local targets = batch:targets():input()
    if opt.cuda then
        inputs = inputs:cuda()
        targets = targets:cuda()
@@ -221,8 +199,43 @@ function fx()
    return loss_val, gradients
 end
 
+
+-- Set up dataset
+ds_all:async()
+sampler:async()
+preprocess = ds_all:normalizePPF()
+ds_train = ds_all:loadTrain()
+ds_val = ds_all:loadValid()
+sampler = dp.RandomSampler{batch_size = opt.batchSize,
+                           ppf = preprocess
+                        }
+
+-- Sample one epoch!
+epoch_sampler = sampler:sampleEpoch(ds_train)
+
+sgd_state = {
+   learningRate = opt.learningRate,
+   --learningRateDecay = 1e-7,
+   --weightDecay = 1e-5,
+   momentum = opt.momentum,
+   dampening = opt.dampening,
+   nesterov = opt.nesterov,
+}
+
 print "Training...."
+local batch
 for i = 1,1000 do
-    new_w, l = optim.sgd(fx, weights, sgd_state)
+    batch, i, n = epoch_sampler(batch)
+    print(i,n)
+    if not batch then
+       print "Epoch Finished"
+       break
+    end
+   local inputs = batch:inputs():input()
+   local targets = batch:targets():input()
+   new_w, l = optim.sgd(function()
+                           return eval(batch:inputs():input(),
+                                       batch:targets():input())
+                        end, weights, sgd_state)
     print("Loss", l[1])
 end
