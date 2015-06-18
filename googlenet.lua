@@ -1,5 +1,6 @@
 require 'dp'
 require 'optim'
+require 'cudnn'
 
 opt = {
    -- Path to ImageNet
@@ -13,12 +14,12 @@ opt = {
    --weightDecay = 5e-4,
    momentum = 0.9,
    dampening = 0,
-   nesterov = true,
+   nesterov = false,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
    -- Batch size
-   batchSize = 64
+   batchSize = 192
 }
 
 opt.trainPath = opt.trainPath or paths.concat(opt.dataPath, 'ILSVRC2012_img_train')
@@ -116,27 +117,27 @@ print(opt)
 
 local features = nn.Concat(2)
 local fb1 = nn.Sequential() -- branch 1
-fb1:add(nn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
-fb1:add(nn.ReLU())
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
+fb1:add(cudnn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
+fb1:add(cudnn.ReLU())
+fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
 
-fb1:add(nn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
-fb1:add(nn.ReLU())
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
+fb1:add(cudnn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
+fb1:add(cudnn.ReLU())
+fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
 
-fb1:add(nn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
+fb1:add(cudnn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.ReLU())
 
-fb1:add(nn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
+fb1:add(cudnn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.ReLU())
 
-fb1:add(nn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
-fb1:add(nn.ReLU())
+fb1:add(cudnn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.ReLU())
 
-fb1:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
+fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
 
 local fb2 = fb1:clone() -- branch 2
-for k,v in ipairs(fb2:findModules('nn.SpatialConvolution')) do
+for k,v in ipairs(fb2:findModules('cudnn.SpatialConvolution')) do
    v:reset() -- reset branch 2's weights
 end
 
@@ -203,7 +204,7 @@ end
 -- Set up dataset
 preprocess = ds_all:normalizePPF()
 ds_train = ds_all:loadTrain()
-ds_train:multithread(2)
+ds_train:multithread(4)
 ds_val = ds_all:loadValid()
 sampler = dp.RandomSampler{batch_size = opt.batchSize,
                            ppf = preprocess
