@@ -91,8 +91,8 @@ model:add(nn.LogSoftMax())
 
 --[[data]]--
 ds_all = dp.ImageNet{
-   train_path=opt.trainPath, valid_path=opt.validPath,
-   meta_path=opt.metaPath, verbose=opt.verbose,
+   train_path=opt.trainPath, valid_path=opt.validPath, meta_path=opt.metaPath,
+   verbose=true,
    cache_mode = opt.overwrite and 'overwrite' or nil
 }
 preprocess = ds_all:normalizePPF()
@@ -128,7 +128,8 @@ sgd_state = {
 function fx()
    model:training()
    local batch = ds_train:batch(opt.batchSize)
-   local inputs = batch:inputs():input():permute(1,4,2,3)
+   preprocess(batch)
+   local inputs = batch:inputs():input():permute(1,4,2,3):cuda()
    local targets = batch:targets():input()
    gradients:zero() -- should i do this instead...?
    local y = model:forward(inputs)
