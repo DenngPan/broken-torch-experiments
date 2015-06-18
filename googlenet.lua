@@ -18,7 +18,7 @@ opt = {
    cuda = true,
    useDevice = 1,
    -- Batch size
-   batchSize = 32
+   batchSize = 64
 }
 
 opt.trainPath = opt.trainPath or paths.concat(opt.dataPath, 'ILSVRC2012_img_train')
@@ -201,14 +201,14 @@ end
 
 
 -- Set up dataset
-ds_all:async()
-sampler:async()
 preprocess = ds_all:normalizePPF()
 ds_train = ds_all:loadTrain()
+ds_train:multithread(2)
 ds_val = ds_all:loadValid()
 sampler = dp.RandomSampler{batch_size = opt.batchSize,
                            ppf = preprocess
                         }
+sampler:async()
 
 -- Sample one epoch!
 epoch_sampler = sampler:sampleEpoch(ds_train)
@@ -223,10 +223,10 @@ sgd_state = {
 }
 
 print "Training...."
-local batch
-for i = 1,1000 do
+while true do
     batch, i, n = epoch_sampler(batch)
-    print(i,n)
+    xlua.progress(i,n); print("")
+    collectgarbage(); collectgarbage()
     if not batch then
        print "Epoch Finished"
        break
@@ -237,5 +237,5 @@ for i = 1,1000 do
                            return eval(batch:inputs():input(),
                                        batch:targets():input())
                         end, weights, sgd_state)
-    print("Loss", l[1])
+    print("    Loss", l[1])
 end
