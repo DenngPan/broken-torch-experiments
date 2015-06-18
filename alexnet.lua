@@ -219,6 +219,10 @@ exp = TrainHelpers.ExperimentHelper{
    nesterov = true,
    datasetMultithreadLoading = 4
 }
-exp:printEpochProgressEvery(1)
-exp:printAverageTrainLossEvery(10)
+exp:printEpochProgress{everyNBatches = 1}
+exp:printAverageTrainLoss{everyNBatches = 10}
+exp:snapshotModel{
+   everyNBatches = 10,
+   filename="alexnet-%s.t7"
+}
 exp:trainEpoch()

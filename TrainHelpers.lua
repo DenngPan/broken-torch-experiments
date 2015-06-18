@@ -80,28 +80,40 @@ function ExperimentHelper:__init(config)
    end
 
 end
-function ExperimentHelper:runEvery(nBatches, func)
-   self.callbacks[nBatches] = func
+function ExperimentHelper:runEvery(config, func)
+   if config.everyNBatches then
+      self.callbacks[config.everyNBatches] = func
+   end
 end
-function ExperimentHelper:printEpochProgressEvery(nBatches)
-   self:runEvery(nBatches,
+function ExperimentHelper:printEpochProgress(freq)
+   self:runEvery(freq,
                  function()
                     xlua.progress(self.currentEpochSeenImages,
                                   self.currentEpochSize)
               end)
 end
-function ExperimentHelper:printAverageTrainLossEvery(nBatches)
-   self:runEvery(nBatches,
+function ExperimentHelper:printAverageTrainLoss(freq, nBatchAverage)
+   nBatchAverage = nBatchAverage or 10
+   self:runEvery(freq,
                  function()
                      local loss = 0
-                     local before,after = table.splice(self.lossLog, #self.lossLog-nBatches, nBatches)
+                     local before,after = table.splice(self.lossLog, #self.lossLog-nBatchAverage, nBatchAverage)
                      for _, entry in ipairs(after) do
                          loss = loss + entry.loss
                      end
-                     print("Average loss for batches "..(self.batchCounter-nBatches).."--"..self.batchCounter..":", loss/#after)
+                     print("Average loss for batches "..(self.batchCounter-nBatchAverage).."--"..self.batchCounter..":", loss/#after)
                  end
    )
 
+end
+function ExperimentHelper:snapshotModel(config)
+   self:runEvery(config,
+                 function()
+                    local filename = string.format(config.filename, self.totalNumSeenImages)
+                    print("Saving experiment state to", filename)
+                    sanitize(self.model)
+                    torch.save(filename, self)
+                 end)
 end
 function ExperimentHelper:trainEpoch()
    self.epochCounter = self.epochCounter + 1
@@ -134,4 +146,3 @@ function ExperimentHelper:trainEpoch()
       end
    end
 end
-
