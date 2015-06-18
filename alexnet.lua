@@ -17,7 +17,7 @@ opt = {
    --weightDecay = 5e-4,
    momentum = 0.9,
    dampening = 0,
-   nesterov = false,
+   nesterov = true,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
@@ -213,16 +213,15 @@ exp = TrainHelpers.ExperimentHelper{
    trainDataset = ds_train,
    batchSize = opt.batchSize,
    preprocessFunc = preprocess,
-   learningRate = 0.01,
-   momentum = 0,
-   dampening = 0,
-   nesterov = true,
+   learningRate = opt.learningRate,
+   momentum = opt.momentum,
+   dampening = opt.dampening,
+   nesterov = opt.nesterov,
    datasetMultithreadLoading = 4
 }
 exp:printEpochProgress{everyNBatches = 1}
 exp:printAverageTrainLoss{everyNBatches = 10}
-exp:snapshotModel{
-   everyNBatches = 1,
+exp:snapshotModel{everyNBatches = 3000,
    filename="alexnet-%s.t7"
 }
-exp:trainEpoch()
+exp:trainForever()

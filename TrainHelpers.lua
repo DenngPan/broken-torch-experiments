@@ -66,9 +66,9 @@ function ExperimentHelper:__init(config)
       learningRate = config.learningRate,
       --learningRateDecay = 1e-7,
       --weightDecay = 1e-5,
-      momentum = config.momentum or 0,
-      dampening = config.dampening or 0,
-      nesterov = config.nesterov or false,
+      momentum = config.momentum,
+      dampening = config.dampening,
+      nesterov = config.nesterov,
    }
 
    self.sampler = dp.RandomSampler{batch_size = self.batchSize,
@@ -82,7 +82,8 @@ function ExperimentHelper:__init(config)
 end
 function ExperimentHelper:runEvery(config, func)
    if config.everyNBatches then
-      self.callbacks[config.everyNBatches] = func
+      self.callbacks[config.everyNBatches] = self.callbacks[config.everyNBatches] or {}
+      table.insert(self.callbacks[config.everyNBatches], func)
    end
 end
 function ExperimentHelper:printEpochProgress(freq)
@@ -122,6 +123,7 @@ function ExperimentHelper:snapshotModel(config)
 end
 function ExperimentHelper:trainEpoch()
    self.epochCounter = self.epochCounter + 1
+   print("---------- Epoch "..self.epochCounter.." ----------")
    local epoch_sampler = self.sampler:sampleEpoch(self.trainDataset)
    local batch
    local l
@@ -143,11 +145,20 @@ function ExperimentHelper:trainEpoch()
       self.totalNumSeenImages = self.totalNumSeenImages + batch:targets():input():size(1)
       table.insert(self.lossLog, {loss=l[1], totalNumSeenImages=self.totalNumSeenImages})
 
-      for frequency, func in pairs(self.callbacks) do
+      for frequency, funcs in pairs(self.callbacks) do
          if self.batchCounter % frequency == 0 then
              io.write("\027[K") -- clear line (useful for progress bar)
-            func(self)
+             for _,func in ipairs(funcs) do
+                 func(self)
+             end
          end
       end
    end
 end
+function ExperimentHelper:trainForever()
+    while true do
+        self:trainEpoch()
+    end
+end
+
+
