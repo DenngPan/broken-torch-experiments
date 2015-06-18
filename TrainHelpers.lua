@@ -1,6 +1,8 @@
 require 'dp'
 require 'optim'
 
+TrainHelpers = {}
+
 -- clear the intermediate states in the model before saving to disk
 -- this saves lots of disk space
 function sanitize(net)
@@ -46,7 +48,7 @@ function inspect(model)
    print(_.uniq(fields))
 end
 
-local ExperimentHelper = torch.class('ExperimentHelper', 'nn.Module')
+local ExperimentHelper = torch.class('TrainHelpers.ExperimentHelper')
 function ExperimentHelper:__init(config)
    self.model = config.model
    self.trainDataset = config.trainDataset
@@ -73,8 +75,8 @@ function ExperimentHelper:__init(config)
                                    ppf = self.preprocessFunc
                                 }
    if config.datasetMultithreadLoading > 0 then
-      trainDataset:multithread(config.datasetMultithreadLoading)
-      sampler:async()
+      self.trainDataset:multithread(config.datasetMultithreadLoading)
+      self.sampler:async()
    end
 
 end
@@ -82,11 +84,24 @@ function ExperimentHelper:runEvery(nBatches, func)
    self.callbacks[nBatches] = func
 end
 function ExperimentHelper:printEpochProgressEvery(nBatches)
-   self:runEvery(nBatches or 1,
+   self:runEvery(nBatches,
                  function()
                     xlua.progress(self.currentEpochSeenImages,
                                   self.currentEpochSize)
               end)
+end
+function ExperimentHelper:printAverageTrainLossEvery(nBatches)
+   self:runEvery(nBatches,
+                 function()
+                     local loss = 0
+                     local before,after = table.splice(self.lossLog, #self.lossLog-nBatches, nBatches)
+                     for _, entry in ipairs(after) do
+                         loss = loss + entry.loss
+                     end
+                     print("Average loss for batches "..(self.batchCounter-nBatches).."--"..self.batchCounter..":", loss/#after)
+                 end
+   )
+
 end
 function ExperimentHelper:trainEpoch()
    self.epochCounter = self.epochCounter + 1
@@ -108,16 +123,15 @@ function ExperimentHelper:trainEpoch()
                                           batch:targets():input())
                            end, weights, sgd_state)
       self.batchCounter = self.batchCounter + 1
-      self.totalNumSeenImages = self.totalNumSeenImages + batch:size(1)
-      self.lossLog:insert({loss=l[1], totalNumSeenImages=self.totalNumSeenImages})
+      self.totalNumSeenImages = self.totalNumSeenImages + batch:targets():input():size(1)
+      table.insert(self.lossLog, {loss=l[1], totalNumSeenImages=self.totalNumSeenImages})
 
       for frequency, func in pairs(self.callbacks) do
          if self.batchCounter % frequency == 0 then
+             io.write("\027[K") -- clear line (useful for progress bar)
             func(self)
          end
       end
    end
 end
 
-
-return {ExperimentHelper=ExperimentHelper}

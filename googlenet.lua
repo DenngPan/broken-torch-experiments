@@ -1,7 +1,7 @@
 require 'dp'
 require 'optim'
 require 'cudnn'
-require 'ExperimentHelpers'
+require 'TrainHelpers'
 require 'cutorch'
 require 'cunn'
 
@@ -208,7 +208,7 @@ ds_train = ds_all:loadTrain()
 ds_val = ds_all:loadValid()
 
 -- Sample one epoch!
-exp = ExperimentHelpers.ExperimentHelper{
+exp = TrainHelpers.ExperimentHelper{
    model = model,
    trainDataset = ds_train,
    batchSize = opt.batchSize,
@@ -219,5 +219,6 @@ exp = ExperimentHelpers.ExperimentHelper{
    nesterov = true,
    datasetMultithreadLoading = 4
 }
-exp:printEpochProgressEvery()
+exp:printEpochProgressEvery(1)
+exp:printAverageTrainLossEvery(10)
 exp:trainEpoch()
