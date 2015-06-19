@@ -14,10 +14,10 @@ opt = {
    learningRate = 0.01,
    --schedule = {[1]=1e-2,[19]=5e-3,[30]=1e-3,[44]=5e-4,[53]=1e-4},
    -- Weight decay
-   --weightDecay = 5e-4,
-   momentum = 0.9,
+   weightDecay = 0.0, --005,
+   momentum = 0.0,
    dampening = 0,
-   nesterov = true,
+   nesterov = false,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
@@ -215,6 +215,7 @@ exp = TrainHelpers.ExperimentHelper{
    preprocessFunc = preprocess,
    learningRate = opt.learningRate,
    momentum = opt.momentum,
+   weightDecay = opt.weightDecay,
    dampening = opt.dampening,
    nesterov = opt.nesterov,
    datasetMultithreadLoading = 4

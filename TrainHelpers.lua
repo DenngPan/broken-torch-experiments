@@ -65,11 +65,12 @@ function ExperimentHelper:__init(config)
    self.sgdState = {
       learningRate = config.learningRate,
       --learningRateDecay = 1e-7,
-      --weightDecay = 1e-5,
+      weightDecay = config.weightDecay,
       momentum = config.momentum,
       dampening = config.dampening,
       nesterov = config.nesterov,
    }
+   print(self.sgdState)
 
    self.sampler = dp.RandomSampler{batch_size = self.batchSize,
                                    ppf = self.preprocessFunc
@@ -94,15 +95,16 @@ function ExperimentHelper:printEpochProgress(freq)
               end)
 end
 function ExperimentHelper:printAverageTrainLoss(freq, nBatchAverage)
-   nBatchAverage = nBatchAverage or 10
+   -- nBatchAverage = nBatchAverage or 10
    self:runEvery(freq,
                  function()
-                     local loss = 0
-                     local before,after = table.splice(self.lossLog, #self.lossLog-nBatchAverage, nBatchAverage)
-                     for _, entry in ipairs(after) do
-                         loss = loss + entry.loss
-                     end
-                     print("Average loss for batches "..(self.batchCounter-nBatchAverage).."--"..self.batchCounter..":", loss/#after)
+                     -- local loss = 0
+                     -- local before,after = table.splice(self.lossLog, #self.lossLog-nBatchAverage, nBatchAverage)
+                     -- for _, entry in ipairs(after) do
+                     --     loss = loss + entry.loss
+                     -- end
+                     -- print("Average loss for batches "..(self.batchCounter-nBatchAverage).."--"..self.batchCounter..":", loss/#after)
+                     print("Loss for batch "..self.batchCounter.." is", self.lossLog[#self.lossLog].loss)
                  end
    )
 
