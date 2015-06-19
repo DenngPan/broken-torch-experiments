@@ -72,9 +72,10 @@ function ExperimentHelper:__init(config)
    }
    print(self.sgdState)
 
-   self.sampler = dp.RandomSampler{batch_size = self.batchSize,
-                                   ppf = self.preprocessFunc
-                                }
+   self.sampler = config.sampler or dp.RandomSampler{
+      batch_size = self.batchSize,
+      ppf = self.preprocessFunc
+   }
    if config.datasetMultithreadLoading > 0 then
       self.trainDataset:multithread(config.datasetMultithreadLoading)
       self.sampler:async()
@@ -120,7 +121,7 @@ function ExperimentHelper:snapshotModel(config)
                         sgdState=self.sgdState,
                         lossLog=self.lossLog
                     })
-                     
+
                  end)
 end
 function ExperimentHelper:trainEpoch()
@@ -162,5 +163,3 @@ function ExperimentHelper:trainForever()
         self:trainEpoch()
     end
 end
-
-
