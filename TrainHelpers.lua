@@ -62,7 +62,7 @@ function ExperimentHelper:__init(config)
    self.lossLog = {}
    self.preprocessFunc = config.preprocessFunc
 
-   self.sgdState = {
+   self.sgdState = config.sgdState or {
       learningRate = config.learningRate,
       --learningRateDecay = 1e-7,
       weightDecay = config.weightDecay,

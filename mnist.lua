@@ -1,6 +1,8 @@
 require 'dp'
 require 'optim'
 require 'TrainHelpers'
+require 'cutorch'
+require 'cunn'
 
 opt = {
    -- Path to ImageNet
@@ -16,7 +18,7 @@ opt = {
    dampening = 0,
    nesterov = true,
    -- CUDA devices
-   cuda = false,
+   cuda = true,
    useDevice = 1,
    -- Batch size
    batchSize = 192
@@ -28,17 +30,19 @@ opt.metaPath = opt.metaPath or paths.concat(opt.dataPath, 'metadata')
 
 print(opt)
 
+import 'cudnn'
+
 model = nn.Sequential()
-model:add(nn.SpatialConvolution(1,64,5,5,1,1))
-model:add(nn.ReLU())
-model:add(nn.SpatialMaxPooling(2,2))
-model:add(nn.SpatialConvolution(64,128,5,5,1,1))
-model:add(nn.ReLU())
-model:add(nn.SpatialMaxPooling(2,2))
+model:add(cudnn.SpatialConvolution(1,64,5,5,1,1))
+model:add(cudnn.ReLU())
+model:add(cudnn.SpatialMaxPooling(2,2))
+model:add(cudnn.SpatialConvolution(64,128,5,5,1,1))
+model:add(cudnn.ReLU())
+model:add(cudnn.SpatialMaxPooling(2,2))
 model:add(nn.Collapse(3))
 model:add(nn.Linear(128*4*4, 11))
 model:add(nn.LogSoftMax())
-model:float()
+model:cuda()
 
 mnist = dp.Mnist{input_preprocess = {dp.Standardize()}}
 ds_train = mnist:trainSet()
@@ -46,7 +50,7 @@ ds_valid = mnist:validSet()
 
 -- loss
 loss = nn.ClassNLLCriterion()
-loss:float()
+loss:cuda()
 
 
 -- CUDA-ize

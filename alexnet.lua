@@ -1,9 +1,9 @@
 require 'dp'
 require 'optim'
-require 'cudnn'
+require 'cunn'
 require 'TrainHelpers'
 require 'cutorch'
-require 'cunn'
+require 'cudnn'
 
 opt = {
    -- Path to ImageNet
@@ -15,9 +15,9 @@ opt = {
    --schedule = {[1]=1e-2,[19]=5e-3,[30]=1e-3,[44]=5e-4,[53]=1e-4},
    -- Weight decay
    weightDecay = 0.0, --005,
-   momentum = 0.0,
+   momentum = 0.9,
    dampening = 0,
-   nesterov = false,
+   nesterov = true,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
@@ -120,52 +120,51 @@ print(opt)
 
 local features = nn.Concat(2)
 local fb1 = nn.Sequential() -- branch 1
-fb1:add(cudnn.SpatialConvolution(3,48,11,11,4,4,2,2))       -- 224 -> 55
+fb1:add(cudnn.SpatialConvolution(3,96,11,11,4,4,2,2))       -- 224 -> 55
 fb1:add(cudnn.ReLU())
+--fb1:add(inn.SpatialCrossResponseNormalization(5, 0.0001, 0.75, 2))
 fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
 
-fb1:add(cudnn.SpatialConvolution(48,128,5,5,1,1,2,2))       --  27 -> 27
+fb1:add(cudnn.SpatialConvolution(96,256,5,5,1,1,2,2))       --  27 -> 27
 fb1:add(cudnn.ReLU())
 fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
 
-fb1:add(cudnn.SpatialConvolution(128,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.SpatialConvolution(256,384,3,3,1,1,1,1))      --  13 ->  13
 fb1:add(cudnn.ReLU())
 
-fb1:add(cudnn.SpatialConvolution(192,192,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.SpatialConvolution(384,384,3,3,1,1,1,1))      --  13 ->  13
 fb1:add(cudnn.ReLU())
 
-fb1:add(cudnn.SpatialConvolution(192,128,3,3,1,1,1,1))      --  13 ->  13
+fb1:add(cudnn.SpatialConvolution(384,256,3,3,1,1,1,1))      --  13 ->  13
 fb1:add(cudnn.ReLU())
 
 fb1:add(cudnn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
 
-local fb2 = fb1:clone() -- branch 2
-for k,v in ipairs(fb2:findModules('cudnn.SpatialConvolution')) do
-   v:reset() -- reset branch 2's weights
-end
-
-features:add(fb1)
-features:add(fb2)
+-- local fb1 = fb1:clone() -- branch 2
+-- for k,v in ipairs(fb2:findModules('cudnn.SpatialConvolution')) do
+--    v:reset() -- reset branch 2's weights
+-- end
+-- 
+-- features:add(fb1)
+-- features:add(fb2)
 
 -- 1.3. Create Classifier (fully connected layers)
 local classifier = nn.Sequential()
-classifier:add(nn.Copy(nil, nil, true)) -- prevents a newContiguous in SpatialMaxPooling:backward()
+--classifier:add(nn.Copy(nil, nil, true)) -- prevents a newContiguous in SpatialMaxPooling:backward()
 classifier:add(nn.View(256*6*6))
-classifier:add(nn.Dropout(0.5))
 classifier:add(nn.Linear(256*6*6, 4096))
-classifier:add(nn.Threshold(0, 1e-6))
-
+classifier:add(nn.ReLU())
 classifier:add(nn.Dropout(0.5))
 classifier:add(nn.Linear(4096, 4096))
-classifier:add(nn.Threshold(0, 1e-6))
-
+classifier:add(nn.ReLU())
+classifier:add(nn.Dropout(0.5))
 classifier:add(nn.Linear(4096, 1000))
 classifier:add(nn.LogSoftMax())
 
 -- 1.4. Combine 1.1 and 1.3 to produce final model
 model = nn.Sequential()
-model:add(nn.Convert(),1)
-model:add(features)
+--model:add(nn.Convert(),1)
+model:add(fb1)
 model:add(classifier)
 
 loss = nn.ClassNLLCriterion()
@@ -225,4 +224,4 @@ exp:printAverageTrainLoss{everyNBatches = 10}
 exp:snapshotModel{everyNBatches = 3000,
    filename="alexnet-%s.t7"
 }
-exp:trainForever()
+--exp:trainForever()
