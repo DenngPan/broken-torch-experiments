@@ -70,7 +70,7 @@ function ExperimentHelper:__init(config)
       dampening = config.dampening,
       nesterov = config.nesterov,
    }
-   print(self.sgdState)
+   print("SGD state:", self.sgdState)
 
    self.sampler = config.sampler or dp.RandomSampler{
       batch_size = self.batchSize,

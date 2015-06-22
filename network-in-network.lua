@@ -4,7 +4,6 @@ require 'cunn'
 require 'TrainHelpers'
 require 'cutorch'
 require 'cunn'
-require 'ccn2'
 
 
 opt = {
@@ -14,11 +13,8 @@ opt = {
    overwrite = false,
    -- Learning schedule parameters
    -- Weight decay
-   weightDecay = 0.0, --005,
-   momentum = 0.9,
-   nesterov = true,
    -- Batch size
-   batchSize = 64,
+   batchSize = 128
 }
 cutorch.setDevice(1)
 
@@ -35,39 +31,46 @@ print(opt)
 local dropout0 = nn.Dropout(0.5)
 local dropout1 = nn.Dropout(0.5)
 
-local model = nn.Sequential()
+model = nn.Sequential()
 
-model:add(nn.Transpose({1,4},{1,3},{1,2}))
+--model:add(nn.Transpose({1,4},{1,3},{1,2}))
 
-model:add(ccn2.SpatialConvolution(3, 192, 5, 1, 2))
+model:add(nn.SpatialConvolution(3, 96, 11, 11, 4, 4))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialConvolution(192, 160, 1, 1))
+model:add(nn.SpatialConvolution(96, 96, 1, 1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialConvolution(160, 96, 1, 1))
+model:add(nn.SpatialConvolution(96, 96, 1, 1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialMaxPooling(3, 2))
-model:add(dropout0)
+model:add(nn.SpatialMaxPooling(3, 3, 2, 2))
+-- now has size 96x26x26
 
-model:add(ccn2.SpatialConvolution(96, 192, 5, 1, 2))
+model:add(nn.SpatialConvolution(96, 256, 5,5,1,1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialConvolution(192, 192, 1, 1))
+model:add(nn.SpatialConvolution(256, 256, 1, 1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialConvolution(192, 192, 1, 1))
+model:add(nn.SpatialConvolution(256, 256, 1, 1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialMaxPooling(3, 2))
-model:add(dropout1)
+model:add(nn.SpatialMaxPooling(3,3, 2,2))
+-- now has size 256x10x10
 
-model:add(ccn2.SpatialConvolution(192, 192, 3, 1, 1))
+model:add(nn.SpatialConvolution(256, 384, 3, 3, 1, 1))
 model:add(nn.ReLU())
-model:add(ccn2.SpatialConvolution(192, 192, 1, 1))
+model:add(nn.SpatialConvolution(384,384,1,1))
 model:add(nn.ReLU())
-model:add(nn.Transpose({4,1},{4,2},{4,3}))
+model:add(nn.SpatialConvolution(384,384,1,1))
+model:add(nn.ReLU())
+model:add(nn.SpatialMaxPooling(3,3, 2,2))
+model:add(nn.Dropout(0.5))
 
-model:add(nn.SpatialConvolutionMM(192, 10, 1, 1, 1, 1))
+model:add(nn.SpatialConvolution(384, 1024, 3,3,1,1))
+model.modules[#model.modules].tag='lastlayer'
 model:add(nn.ReLU())
-
-model:add(nn.SpatialAveragePooling(8, 8, 8, 8))
-model:add(nn.Reshape(10))
+model:add(nn.SpatialConvolution(1024, 1024, 1,1,1,1))
+model.modules[#model.modules].tag='lastlayer'
+model:add(nn.ReLU())
+model:add(nn.SpatialConvolution(1024, 1000, 1,1,1,1))
+model.modules[#model.modules].tag='lastlayer'
+model:add(nn.View(1000))
 model:add(nn.LogSoftMax())
 
 for i,layer in ipairs(model.modules) do
@@ -90,22 +93,18 @@ local learningRates = torch.Tensor(weight_size):fill(0)
 local weightDecays = torch.Tensor(weight_size):fill(0)
 local counter = 0
 for i, layer in ipairs(model.modules) do
-   if layer.__typename == 'ccn2.SpatialConvolution' then
+   if layer.__typename == 'nn.SpatialConvolution' then
+      local base_lr = 1.0
+      if layer.tag == 'lastlayer' then
+          base_lr = 0.1 -- slower learning for the last layer please
+          print("Picking a lower learning rate for the last layers")
+      end
       local weight_size = layer.weight:size(1)*layer.weight:size(2)
-      learningRates[{{counter+1, counter+weight_size}}]:fill(1)
+      learningRates[{{counter+1, counter+weight_size}}]:fill(1 * base_lr)
       weightDecays[{{counter+1, counter+weight_size}}]:fill(wds)
       counter = counter+weight_size
       local bias_size = layer.bias:size(1)
-      learningRates[{{counter+1, counter+bias_size}}]:fill(2)
-      weightDecays[{{counter+1, counter+bias_size}}]:fill(0)
-      counter = counter+bias_size
-   elseif layer.__typename == 'nn.SpatialConvolutionMM' then
-      local weight_size = layer.weight:size(1)*layer.weight:size(2)
-      learningRates[{{counter+1, counter+weight_size}}]:fill(0.1)
-      weightDecays[{{counter+1, counter+weight_size}}]:fill(wds)
-      counter = counter+weight_size
-      local bias_size = layer.bias:size(1)
-      learningRates[{{counter+1, counter+bias_size}}]:fill(0.2)
+      learningRates[{{counter+1, counter+bias_size}}]:fill(2 * base_lr)
       weightDecays[{{counter+1, counter+bias_size}}]:fill(0)
       counter = counter+bias_size
   end
@@ -145,7 +144,7 @@ sgdState = {
     dampening = 0,
     weightDecay = 0,
     learningRateDecay = 0,
-    learningRates = learningWeights,
+    learningRates = learningRates,
     weightDecays = weightDecays
 }
 
@@ -164,4 +163,4 @@ exp:printAverageTrainLoss{everyNBatches = 10}
 exp:snapshotModel{everyNBatches = 3000,
    filename="network-in-network-%s.t7"
 }
---exp:trainForever()
+exp:trainForever()
