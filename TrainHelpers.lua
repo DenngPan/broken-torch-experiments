@@ -187,10 +187,10 @@ function TrainHelpers.normalizePreprocessDataset(dataset)
          local input = batch:inputs():forward('bchw')
          if not mean then
             mean = input:mean(1)
-            std = input:std(1)
+            std = input:std()
          else
             mean:add(input:mean(1):expandAs(mean))
-            std:add(input:std(1):expandAs(mean))
+            std:add(input:std():expandAs(mean))
          end
       end
       print ""
