@@ -163,3 +163,59 @@ function ExperimentHelper:trainForever()
         self:trainEpoch()
     end
 end
+
+function TrainHelpers.normalizePreprocessDataset(dataset)
+   local meanstdCache = paths.concat(dataset._data_path[1], 'mean_img.th7')
+   local mean, std
+   if paths.filep(meanstdCache) then
+      local meanstd = torch.load(meanstdCache)
+      mean = meanstd.mean
+      std = meanstd.std
+      print('Loaded mean and std from cache.')
+   else
+      local tm = torch.Timer()
+      local nSamples = 10000
+      print('Estimating the mean,std images over '
+            .. nSamples .. ' randomly sampled training images')
+
+      mean = nil
+      std = nil
+      local batch
+      for i=1,nSamples,100 do
+         xlua.progress(i, nSamples)
+         batch = dataset:sample(batch, 100)
+         local input = batch:inputs():forward('bchw')
+         if not mean then
+            mean = input:mean(1)
+            std = input:std(1)
+         else
+            mean:add(input:mean(1):expandAs(mean))
+            std:add(input:std(1):expandAs(mean))
+         end
+      end
+      print ""
+      mean = mean*100 / nSamples
+      std = std*100 / nSamples
+      local cache = {mean=mean,std=std}
+      torch.save(meanstdCache, cache)
+
+      print('Time to estimate:', tm:time().real)
+   end
+
+   local function ppf(batch)
+      local inputView = batch:inputs()
+      local input = inputView:input()
+      input:add(-mean:expandAs(input)):cdiv(std:expandAs(input))
+      return batch
+   end
+
+   if dataset._verbose then
+      -- just check if mean/std look good now
+      local batch = dataset:sample(100)
+      ppf(batch)
+      local input = batch:inputs():input()
+      print('Stats of 100 randomly sampled images after normalizing. '..
+            'Mean: ' .. input:mean().. ' Std: ' .. input:std())
+   end
+   return ppf
+end

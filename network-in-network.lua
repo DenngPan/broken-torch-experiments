@@ -134,8 +134,8 @@ end
 
 
 -- Set up dataset
-preprocess = ds_all:normalizePPF()
 ds_train = ds_all:loadTrain()
+preprocess = TrainHelpers.normalizePreprocessDataset(ds_train)
 ds_val = ds_all:loadValid()
 
 sgdState = {
