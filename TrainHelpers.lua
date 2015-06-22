@@ -170,16 +170,16 @@ function TrainHelpers.normalizePreprocessDataset(dataset)
    if paths.filep(meanstdCache) then
       local meanstd = torch.load(meanstdCache)
       mean = meanstd.mean
-      std = meanstd.std
+      -- std = meanstd.std
       print('Loaded mean and std from cache.')
    else
       local tm = torch.Timer()
       local nSamples = 10000
-      print('Estimating the mean,std images over '
+      print('Estimating the mean images over '
             .. nSamples .. ' randomly sampled training images')
 
       mean = nil
-      std = nil
+      -- std = nil
       local batch
       for i=1,nSamples,100 do
          xlua.progress(i, nSamples)
@@ -187,26 +187,26 @@ function TrainHelpers.normalizePreprocessDataset(dataset)
          local input = batch:inputs():forward('bchw')
          if not mean then
             mean = input:mean(1)
-            std = input:std()
+            -- std = input:std()
          else
             mean:add(input:mean(1):expandAs(mean))
-            std:add(input:std():expandAs(mean))
+            -- std = std + input:std()
          end
       end
       print ""
       mean = mean*100 / nSamples
-      std = std*100 / nSamples
-      local cache = {mean=mean,std=std}
+      --std = std*100 / nSamples
+      local cache = {mean=mean} --,std=std}
       torch.save(meanstdCache, cache)
 
       print('Time to estimate:', tm:time().real)
    end
 
    local function ppf(batch)
-      local inputView = batch:inputs()
-      local input = inputView:input()
-      input:add(-mean:expandAs(input)):cdiv(std:expandAs(input))
-      return batch
+       local inputView = batch:inputs()
+       local input = inputView:input()
+       input:add(-mean:expandAs(input)) --:div(std)
+       return batch
    end
 
    if dataset._verbose then
