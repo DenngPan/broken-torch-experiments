@@ -16,7 +16,7 @@ opt = {
    --weightDecay = 5e-4,
    momentum = 0.9,
    dampening = 0,
-   nesterov = true,
+   nesterov = false,
    -- CUDA devices
    cuda = true,
    useDevice = 1,
@@ -39,7 +39,8 @@ model:add(cudnn.SpatialMaxPooling(2,2))
 model:add(cudnn.SpatialConvolution(64,128,5,5,1,1))
 model:add(cudnn.ReLU())
 model:add(cudnn.SpatialMaxPooling(2,2))
-model:add(nn.Collapse(3))
+--model:add(nn.Collapse(3))
+model:add(nn.View(128*4*4))
 model:add(nn.Linear(128*4*4, 11))
 model:add(nn.LogSoftMax())
 model:cuda()

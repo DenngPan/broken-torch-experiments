@@ -3,7 +3,8 @@ require 'optim'
 require 'cunn'
 require 'TrainHelpers'
 require 'cutorch'
---require 'cudnn'
+require 'loadcaffe'
+require 'cudnn'
 
 dataPath = paths.concat(dp.DATA_DIR, 'ImageNet')
 trainPath = paths.concat(dataPath, 'ILSVRC2012_img_train')
@@ -11,54 +12,18 @@ validPath = paths.concat(dataPath, 'ILSVRC2012_img_val')
 metaPath = paths.concat(dataPath, 'metadata')
 
 --[[Model]]--
+model = loadcaffe.load('/mnt/caffe/models/bvlc_alexnet/deploy.prototxt',
+    '/mnt/caffe/models/bvlc_alexnet/caffe_alexnet_train_iter_1.caffemodel',
+    'cudnn')
+-- Replace SoftMax with LogSoftMax
+model.modules[#model.modules] = nil
+model:add(nn.LogSoftMax():cuda())
 
-model = nn.Sequential()
-model:add(nn.SpatialConvolution(3,96,11,11,4,4,2,2))       -- 224 -> 55
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0)
-model:add(nn.ReLU())
-model:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 55 ->  27
-
-model:add(nn.SpatialConvolution(96,256,5,5,1,1,2,2))       --  27 -> 27
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0.1)
-model:add(nn.ReLU())
-model:add(nn.SpatialMaxPooling(3,3,2,2))                   --  27 ->  13
-
-model:add(nn.SpatialConvolution(256,384,3,3,1,1,1,1))      --  13 ->  13
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0)
-model:add(nn.ReLU())
-
-model:add(nn.SpatialConvolution(384,384,3,3,1,1,1,1))      --  13 ->  13
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0.1)
-model:add(nn.ReLU())
-
-model:add(nn.SpatialConvolution(384,256,3,3,1,1,1,1))      --  13 ->  13
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0.1)
-model:add(nn.ReLU())
-
-model:add(nn.SpatialMaxPooling(3,3,2,2))                   -- 13 -> 6
-
-model:add(nn.View(256*6*6))
-model:add(nn.Linear(256*6*6, 4096))
-model.modules[#model.modules].weight:normal(0, 0.005)
-model.modules[#model.modules].bias:fill(0)
-model:add(nn.ReLU())
-model:add(nn.Dropout(0.5))
-model:add(nn.Linear(4096, 4096))
-model.modules[#model.modules].weight:normal(0, 0.01)
-model.modules[#model.modules].bias:fill(0)
-model:add(nn.ReLU())
-model:add(nn.Dropout(0.5))
-model:add(nn.Linear(4096, 1000))
-model.modules[#model.modules].weight:normal(0, 0.005)
-model.modules[#model.modules].bias:fill(0.1)
-model:add(nn.LogSoftMax())
+cutorch.setDevice(1)
+--model:cuda()
 
 loss = nn.ClassNLLCriterion()
+loss:cuda()
 
 -- -- Fill weights, learning rates, and biases
 -- for i,layer in ipairs(model.modules) do
@@ -70,13 +35,13 @@ loss = nn.ClassNLLCriterion()
 -- ---- set individual learning rates and weight decays
 local wds = 1e-4
 
-local dE, param = model:getParameters()
-local weight_size = dE:size(1)
-local learningRates = torch.Tensor(weight_size):fill(0)
-local weightDecays = torch.Tensor(weight_size):fill(0)
-local counter = 0
+weights, gradients = model:getParameters()
+weight_size = weights:size(1)
+learningRates = torch.Tensor(weight_size):fill(0)
+weightDecays = torch.Tensor(weight_size):fill(0)
+counter = 0
 for i, layer in ipairs(model.modules) do
-   if layer.__typename == 'nn.SpatialConvolution' then
+   if layer.__typename == 'cudnn.SpatialConvolution' then
       local base_lr = 1.0
       if layer.tag == 'lastlayer' then
           base_lr = 0.1 -- slower learning for the last layer please
@@ -108,11 +73,6 @@ ds_all = dp.ImageNet{
    verbose=true,
 }
 
-cutorch.setDevice(1)
-model:cuda()
-loss:cuda()
-
-weights,gradients = model:getParameters() -- be sure to do this AFTER CUDA-izing it!
 function eval(inputs, targets)
    model:training()
    inputs = inputs:cuda()
@@ -146,11 +106,12 @@ exp = TrainHelpers.ExperimentHelper{
    batchSize = 192,
    preprocessFunc = preprocess,
    datasetMultithreadLoading = 4,
-   sgdState = sgdState
+   sgdState = sgdState,
+   eval = eval,
 }
 exp:printEpochProgress{everyNBatches = 1}
 exp:printAverageTrainLoss{everyNBatches = 20}
-exp:snapshotModel{everyNBatches = 3000,
+exp:snapshotModel{everyNBatches = 1000,
    filename="alexnet-%s.t7"
 }
-exp:trainForever()
+exp:trainForever(eval, weights)
