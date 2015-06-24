@@ -7,23 +7,14 @@ TrainHelpers = {}
 -- this saves lots of disk space
 function sanitize(net)
    local list = net:listModules()
-   for _,val in ipairs(list) do
-         for name,field in pairs(val) do
-            if torch.type(field) == 'cdata' then val[name] = nil end
-            if name == 'homeGradBuffers' then val[name] = nil end
-            if name == 'input_gpu' then val[name] = {} end
-            if name == 'input' then val[name] = {} end
-            if name == 'finput' then val[name] = {} end
-            if name == 'gradOutput_gpu' then val[name] = {} end
-            if name == 'gradOutput' then val[name] = {} end
-            if name == 'fgradOutput' then val[name] = {} end
-            if name == 'gradInput_gpu' then val[name] = {} end
-            if name == 'gradInput' then val[name] = {} end
-            if name == 'fgradInput' then val[name] = {} end
-            if (name == 'output' or name == 'gradInput') then
-               val[name] = field.new()
+   for modidx,val in ipairs(list) do
+      for name,field in pairs(val) do
+         for _,nName in pairs{'input', 'gradOutput', 'gradWeight', 'gradInput', 'output'} do
+            if (name == nName or name == 'f'..nName or name == nName..'_gpu') then
+               val[name] = val[name].new()
             end
          end
+      end
    end
 end
 
