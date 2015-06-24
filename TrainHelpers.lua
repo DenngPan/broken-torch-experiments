@@ -5,7 +5,7 @@ TrainHelpers = {}
 
 -- clear the intermediate states in the model before saving to disk
 -- this saves lots of disk space
-function sanitize(net)
+function TrainHelpers.sanitize(net)
    local list = net:listModules()
    for modidx,val in ipairs(list) do
       for name,field in pairs(val) do
@@ -18,7 +18,7 @@ function sanitize(net)
    end
 end
 
-function inspect(model)
+function TrainHelpers.inspect(model)
    local list = model:listModules()
    local fields = {}
    for i, module in ipairs(list) do
@@ -155,7 +155,16 @@ function ExperimentHelper:trainForever(eval, weights)
     end
 end
 
-function TrainHelpers.normalizePreprocessDataset(dataset)
+function TrainHelpers.normalizePreprocessDataset(dataset, rawScale)
+   -- Returns a function that
+   if not rawScale then
+      -- Important! ImageNet models like to have input scaled to
+      -- 0-255, not 0-1! After mean subtraction, this results in
+      -- inputs with range approximately [-128,128]. This matches with
+      -- Caffe's defaults, and all of Caffe's reference models do
+      -- something like this.
+      rawScale = 255
+   end
    local meanstdCache = paths.concat(dataset._data_path[1], 'mean_img.th7')
    local mean, std
    if paths.filep(meanstdCache) then
@@ -196,7 +205,7 @@ function TrainHelpers.normalizePreprocessDataset(dataset)
    local function ppf(batch)
        local inputView = batch:inputs()
        local input = inputView:input()
-       input:add(-mean:expandAs(input)) --:div(std)
+       input:add(-mean:expandAs(input)):mul(rawScale)
        return batch
    end
 
