@@ -115,7 +115,7 @@ function ExperimentHelper:snapshotModel(config)
 
                  end)
 end
-function ExperimentHelper:trainEpoch()
+function ExperimentHelper:trainEpoch(eval, weights)
    self.epochCounter = self.epochCounter + 1
    print("---------- Epoch "..self.epochCounter.." ----------")
    local epoch_sampler = self.sampler:sampleEpoch(self.trainDataset)
@@ -134,7 +134,7 @@ function ExperimentHelper:trainEpoch()
       new_w, l = optim.sgd(function()
                               return eval(batch:inputs():input(),
                                           batch:targets():input())
-                           end, weights, sgdState)
+                           end, weights, self.sgdState)
       self.batchCounter = self.batchCounter + 1
       self.totalNumSeenImages = self.totalNumSeenImages + batch:targets():input():size(1)
       table.insert(self.lossLog, {loss=l[1], totalNumSeenImages=self.totalNumSeenImages})
@@ -149,9 +149,9 @@ function ExperimentHelper:trainEpoch()
       end
    end
 end
-function ExperimentHelper:trainForever()
+function ExperimentHelper:trainForever(eval, weights)
     while true do
-        self:trainEpoch()
+        self:trainEpoch(eval, weights)
     end
 end
 
