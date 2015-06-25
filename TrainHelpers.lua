@@ -223,21 +223,27 @@ end
 
 function TrainHelpers.evaluateModel(model, epoch, cuda)
    -- Evaluate the model and report accuracy
+   print "Evaluating model..."
    local total = 0
    local correct1 = 0
+   local correct5 = 0
    local batch, imagesSeen, epochSize
-   while true; do -- Each batch
+   while true do -- Each batch
+      collectgarbage(); collectgarbage()
       batch,imagesSeen,epochSize = epoch(batch)
       if not batch then
          break
       end
       local inputs = batch:inputs():input()
-      local targets = batch:targets():input()
+      local targets = batch:targets():input():long()
       if cuda then
          inputs = inputs:cuda()
-         targets = targets:cuda()
       end
-      local outputs = model:forward(inputs)
+      local outputs = model:forward(inputs):float()
+      -- Take the average of all ten crops
+      assert(outputs:size(1) % 10 == 0, "Uh oh -- number of crops is not divisible by 10.")
+      outputs = outputs:view(outputs:size(1)/10, 10, outputs:size(2)):mean(2):select(2,1)
+      targets = targets:view(targets:size(1)/10, 10):select(2,1):clone()
       local _, indices = torch.sort(outputs)
       -- indices has shape (batchSize, nClasses)
       local top1 = indices:select(2, 1)
@@ -252,4 +258,5 @@ function TrainHelpers.evaluateModel(model, epoch, cuda)
    print("\n")
    print("Top 1 accuracy: "..(correct1 / total))
    print("Top 5 accuracy: "..(correct5 / total))
+   return {correct1=correct1, correct5=correct5}
 end
