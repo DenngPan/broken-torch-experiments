@@ -3,21 +3,6 @@ require 'optim'
 
 TrainHelpers = {}
 
--- clear the intermediate states in the model before saving to disk
--- this saves lots of disk space
-function TrainHelpers.sanitizeModel(net)
-   local list = net:listModules()
-   for modidx,val in ipairs(list) do
-      for name,field in pairs(val) do
-         for _,nName in pairs{'input', 'gradOutput', 'gradWeight', 'gradInput', 'output'} do
-            if (name == nName or name == 'f'..nName or name == nName..'_gpu') then
-               val[name] = val[name].new()
-            end
-         end
-      end
-   end
-end
-
 function TrainHelpers.inspect(model)
    local list = model:listModules()
    local fields = {}

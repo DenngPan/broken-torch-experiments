@@ -68,19 +68,19 @@ local ds_all = dp.ImageNet{
    verbose = true,
 }
 local ds_train = ds_all:loadTrain()
-local preprocess = TrainHelpers.normalizePreprocessDataset(ds_train, 255)
 local ds_val = ds_all:loadValid()
+local preprocess = TrainHelpers.normalizePreprocessDataset(ds_train, 255)
 local sampler = dp.RandomSampler{
     batch_size = 128,
-    epoch_size = 1000,
+    ppf = preprocess
+}
+local val_sampler = dp.RandomSampler{
+    batch_size = 12,
     ppf = preprocess
 }
 ds_train:multithread(4)
 ds_val:multithread(4)
 sampler:async()
-local val_sampler = dp.RandomSampler{ batch_size = 12, ppf = preprocess,
-    epoch_size = 8000
-}
 val_sampler:async()
 
 
@@ -141,7 +141,7 @@ while true do -- Each epoch
    end
    -- Epoch completed! Snapshot model.
    torch.save("snapshots/alexnet-epoch"..epochCounter..".t7", {
-       model = TrainHelpers.sanitizeModel(model),
+       modelWeights = weights,
        sgdState = sgdState,
        lossLog = lossLog,
        epochCounter = epochCounter
