@@ -59,6 +59,7 @@ loss:cuda()
 
 
 ------------ Dataset ------------
+
 local dataPath = paths.concat(dp.DATA_DIR, 'ImageNet')
 local ds_all = dp.ImageNet{
    train_path = paths.concat(dataPath, 'ILSVRC2012_img_train'),
@@ -71,12 +72,15 @@ local preprocess = TrainHelpers.normalizePreprocessDataset(ds_train, 255)
 local ds_val = ds_all:loadValid()
 local sampler = dp.RandomSampler{
     batch_size = 128,
+    epoch_size = 100000,
     ppf = preprocess
 }
 ds_train:multithread(4)
 sampler:async()
 
+
 ------------ Actual Training ------------
+
 function forwardBackwardBatch(inputs, targets)
    model:training()
    gradients:zero() -- should i do this instead...?
@@ -91,21 +95,21 @@ function forwardBackwardBatch(inputs, targets)
    return loss_val, gradients
 end
 
-
--- Set up dataset
 local lossLog = {}
 local epochCounter = 0
 local sgdState = {
    learningRate = 0.01,
-   momentum=0.9,
-   dampening=0,
-   weightDecay=0.0005,
-   nesterov=true
+   momentum     = 0.9,
+   dampening    = 0,
+   weightDecay  = 0.0005,
+   nesterov     = true
 }
-while true; do -- eoch epoch
+while true; do -- Each epoch
+   epochCounter = epochCounter + 1
    local epoch = sampler:sampleEpoch(ds_train)
    local batch,imagesSeen,epochSize
-   while true; do -- each batch
+   print("---------- Epoch "..epochCounter.." ----------")
+   while true; do -- Each batch
       batch,imagesSeen,epochSize = epoch(batch)
       if not batch then
          break
@@ -115,11 +119,27 @@ while true; do -- eoch epoch
          batch:inputs():input():cuda(),
          batch:targets():input():cuda()
       )
-      -- SGD step
+      -- SGD step: modifies weights in-place
       optim.sgd(function() return loss, gradients end,
                 weights,
                 sgdState)
+      -- Display progress and loss
+      xlua.progress(imagesSeen, epochSize)
+      if (sgdState.evalCounter / sampler:batchSize()) % 20 == 0 then
+         print("Loss:", loss_val)
+      end
+      table.insert(lossLog, loss_val)
    end
-   -- Epoch completed!
-   epochCounter = epochCounter + 1
+   -- Epoch completed! Snapshot model.
+   torch.save("snapshots/alexnet-epoch"..epochCounter..".t7",
+              {model=TrainHelpers.sanitizeModel(model),
+               sgdState=sgdState,
+               lossLog=lossLog})
+   -- Evaluate model
+   TrainHelpers.evaluateModel(model, sampler:sampleEpoch(ds_val), true)
+   -- Every so often, decrease learning rate
+   if epochCounter % 20 == 0 then
+      sgdState.learningRate = sgdState.learningRate * 0.1
+      print("Dropped learning rate, sgdState = ", sgdState)
+   end
 end
