@@ -250,6 +250,7 @@ end
 
 function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename)
    while true do -- Each epoch
+      sgdState.epochCounter = sgdState.epochCounter + 1
       local epoch = sampler:sampleEpoch(ds_train)
       local batch,imagesSeen,epochSize
       print("---------- Epoch "..sgdState.epochCounter.." ----------")
@@ -275,7 +276,13 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
           end
           table.insert(sgdState.lossLog, loss_val)
       end
-      -- Epoch completed! Snapshot model.
+      -- Epoch completed!
+      -- Every so often, decrease learning rate
+      if sgdState.epochCounter % 20 == 0 then
+          sgdState.learningRate = sgdState.learningRate * 0.1
+          print("Dropped learning rate, sgdState = ", sgdState)
+      end
+      -- Snapshot model.
       if filename then
           torch.save(filename.."-epoch"..sgdState.epochCounter..".t7", {
               modelWeights = weights,
@@ -287,11 +294,5 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
           epochCounter = sgdState.epochCounter,
           results = TrainHelpers.evaluateModel(model, val_sampler:sampleEpoch(ds_val), true)
       })
-      -- Every so often, decrease learning rate
-      if sgdState.epochCounter % 20 == 0 then
-          sgdState.learningRate = sgdState.learningRate * 0.1
-          print("Dropped learning rate, sgdState = ", sgdState)
-      end
-      sgdState.epochCounter = sgdState.epochCounter + 1
    end
 end

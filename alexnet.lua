@@ -108,7 +108,7 @@ sgdState = {
    dampening    = 0,
    weightDecay  = 0.0005,
    nesterov     = true,
-   epochCounter = 1,
+   epochCounter = 0,
    lossLog = {},
    accuracyLog = {}
 }
