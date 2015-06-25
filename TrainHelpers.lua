@@ -1,4 +1,5 @@
 require 'dp'
+require 'xlua'
 require 'optim'
 
 TrainHelpers = {}
@@ -229,7 +230,7 @@ function TrainHelpers.evaluateModel(model, epoch, cuda)
       assert(outputs:size(1) % 10 == 0, "Uh oh -- number of crops is not divisible by 10.")
       outputs = outputs:view(outputs:size(1)/10, 10, outputs:size(2)):mean(2):select(2,1)
       targets = targets:view(targets:size(1)/10, 10):select(2,1):clone()
-      local _, indices = torch.sort(outputs)
+      local _, indices = torch.sort(outputs, 2, true)
       -- indices has shape (batchSize, nClasses)
       local top1 = indices:select(2, 1)
       local top5 = indices:narrow(2, 1,5)
