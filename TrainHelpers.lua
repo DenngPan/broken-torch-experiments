@@ -246,3 +246,52 @@ function TrainHelpers.evaluateModel(model, epoch, cuda)
    print("Top 5 accuracy: "..(correct5 / total))
    return {correct1=correct1, correct5=correct5}
 end
+
+
+function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename)
+   while true do -- Each epoch
+      local epoch = sampler:sampleEpoch(ds_train)
+      local batch,imagesSeen,epochSize
+      print("---------- Epoch "..sgdState.epochCounter.." ----------")
+      while true do -- Each batch
+          collectgarbage(); collectgarbage()
+          batch,imagesSeen,epochSize = epoch(batch)
+          if not batch then
+              break
+          end
+          -- Run forward and backward pass on inputs and labels
+          local loss_val, gradients = forwardBackwardBatch(
+              batch:inputs():input():cuda(),
+              batch:targets():input():cuda()
+          )
+          -- SGD step: modifies weights in-place
+          optim.sgd(function() return loss_val, gradients end,
+                      weights,
+                      sgdState)
+          -- Display progress and loss
+          xlua.progress(imagesSeen, epochSize)
+          if sgdState.evalCounter % 20 == 0 then
+              print("\027[KBatch "..sgdState.evalCounter.." loss:", loss_val)
+          end
+          table.insert(sgdState.lossLog, loss_val)
+      end
+      -- Epoch completed! Snapshot model.
+      if filename then
+          torch.save(filename.."-epoch"..sgdState.epochCounter..".t7", {
+              modelWeights = weights,
+              sgdState = sgdState,
+          })
+      end
+      -- Evaluate model
+      table.insert(sgdState.accuracyLog, {
+          epochCounter = sgdState.epochCounter,
+          results = TrainHelpers.evaluateModel(model, val_sampler:sampleEpoch(ds_val), true)
+      })
+      -- Every so often, decrease learning rate
+      if sgdState.epochCounter % 20 == 0 then
+          sgdState.learningRate = sgdState.learningRate * 0.1
+          print("Dropped learning rate, sgdState = ", sgdState)
+      end
+      sgdState.epochCounter = sgdState.epochCounter + 1
+   end
+end

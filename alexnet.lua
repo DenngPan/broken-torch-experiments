@@ -8,7 +8,7 @@ require 'inn'
 
 ------------ Model ------------
 
-local model = nn.Sequential()
+model = nn.Sequential()
 model:add(cudnn.SpatialConvolution(3,96,11,11,4,4,2,2))
     model.modules[#model.modules].weight:normal(0, 0.01)
     model.modules[#model.modules].bias:fill(0)
@@ -54,27 +54,27 @@ model:add(nn.LogSoftMax())
 cutorch.setDevice(1)
 model:cuda()
 
-local loss = nn.ClassNLLCriterion()
+loss = nn.ClassNLLCriterion()
 loss:cuda()
 
 
 ------------ Dataset ------------
 
-local dataPath = paths.concat(dp.DATA_DIR, 'ImageNet')
-local ds_all = dp.ImageNet{
+dataPath = paths.concat(dp.DATA_DIR, 'ImageNet')
+ds_all = dp.ImageNet{
    train_path = paths.concat(dataPath, 'ILSVRC2012_img_train'),
    valid_path = paths.concat(dataPath, 'ILSVRC2012_img_val'),
    meta_path = paths.concat(dataPath, 'metadata'),
    verbose = true,
 }
-local ds_train = ds_all:loadTrain()
-local ds_val = ds_all:loadValid()
-local preprocess = TrainHelpers.normalizePreprocessDataset(ds_train, 255)
-local sampler = dp.RandomSampler{
+ds_train = ds_all:loadTrain()
+ds_val = ds_all:loadValid()
+preprocess = TrainHelpers.normalizePreprocessDataset(ds_train, 255)
+sampler = dp.RandomSampler{
     batch_size = 128,
     ppf = preprocess
 }
-local val_sampler = dp.RandomSampler{
+val_sampler = dp.RandomSampler{
     batch_size = 12,
     ppf = preprocess
 }
@@ -86,7 +86,7 @@ val_sampler:async()
 
 ------------ Actual Training ------------
 
-local weights, gradients = model:getParameters()
+weights, gradients = model:getParameters()
 
 function forwardBackwardBatch(inputs, targets)
    model:training()
@@ -102,58 +102,15 @@ function forwardBackwardBatch(inputs, targets)
    return loss_val, gradients
 end
 
-local lossLog = {}
-local accuracyLog = {}
-local epochCounter = 0
-local sgdState = {
+sgdState = {
    learningRate = 0.01,
    momentum     = 0.9,
    dampening    = 0,
    weightDecay  = 0.0005,
-   nesterov     = true
+   nesterov     = true,
+   epochCounter = 1,
+   lossLog = {},
+   accuracyLog = {}
 }
-while true do -- Each epoch
-   epochCounter = epochCounter + 1
-   local epoch = sampler:sampleEpoch(ds_train)
-   local batch,imagesSeen,epochSize
-   print("---------- Epoch "..epochCounter.." ----------")
-   while true do -- Each batch
-      collectgarbage(); collectgarbage()
-      batch,imagesSeen,epochSize = epoch(batch)
-      if not batch then
-         break
-      end
-      -- Run forward and backward pass on inputs and labels
-      local loss_val, gradients = forwardBackwardBatch(
-         batch:inputs():input():cuda(),
-         batch:targets():input():cuda()
-      )
-      -- SGD step: modifies weights in-place
-      optim.sgd(function() return loss, gradients end,
-                weights,
-                sgdState)
-      -- Display progress and loss
-      xlua.progress(imagesSeen, epochSize)
-      if sgdState.evalCounter % 20 == 0 then
-         print("\027[KBatch "..sgdState.evalCounter.." loss:", loss_val)
-      end
-      table.insert(lossLog, loss_val)
-   end
-   -- Epoch completed! Snapshot model.
-   torch.save("snapshots/alexnet-epoch"..epochCounter..".t7", {
-       modelWeights = weights,
-       sgdState = sgdState,
-       lossLog = lossLog,
-       epochCounter = epochCounter
-   })
-   -- Evaluate model
-   table.insert(accuracyLog, {
-       epochCounter = epochCounter,
-       results = TrainHelpers.evaluateModel(model, val_sampler:sampleEpoch(ds_val), true)
-   })
-   -- Every so often, decrease learning rate
-   if epochCounter % 20 == 0 then
-      sgdState.learningRate = sgdState.learningRate * 0.1
-      print("Dropped learning rate, sgdState = ", sgdState)
-   end
-end
+
+TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, "snapshots/alexnet")
