@@ -214,6 +214,7 @@ function TrainHelpers.evaluateModel(model, epoch, cuda, useTenCrops)
    local correct1 = 0
    local correct5 = 0
    local batch, imagesSeen, epochSize
+   model:evaluate() -- sets flag (for dropout, etc)
    while true do -- Each batch
       collectgarbage(); collectgarbage()
       batch,imagesSeen,epochSize = epoch(batch)
@@ -266,6 +267,7 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
               break
           end
           -- Run forward and backward pass on inputs and labels
+          model:training()
           local loss_val, gradients = forwardBackwardBatch(
               batch:inputs():input():cuda(),
               batch:targets():input():cuda()
@@ -285,7 +287,7 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
       -- Every so often, decrease learning rate
       if sgdState.epochCounter % epochDropCount == 0 then
           sgdState.learningRate = sgdState.learningRate * 0.1
-          print("Dropped learning rate, sgdState = ", sgdState)
+          print("Dropped learning rate to", sgdState.learningRate)
       end
       -- Snapshot model.
       if filename then

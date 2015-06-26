@@ -24,24 +24,24 @@ model = nn.Sequential()
 model:add(nn.Narrow(2,1,1)) -- Convert RGB to grayscale
 model:add(cudnn.SpatialConvolution(1, 64, 7,7, 2,2))
 model:add(nn.SpatialBatchNormalization(64, 1e-3))
-model:add(nn.Dropout(0.1))
+--model:add(nn.Dropout(0.1))
 model:add(cudnn.ReLU())
 model:add(cudnn.SpatialConvolution(64, 64, 1,1, 1,1))
 model:add(nn.SpatialBatchNormalization(64, 1e-3))
-model:add(nn.Dropout(0.2))
+--model:add(nn.Dropout(0.2))
 model:add(cudnn.ReLU())
 model:add(cudnn.SpatialConvolution(64, 64, 3,3, 2,2))
 model:add(nn.SpatialBatchNormalization(64, 1e-3))
-model:add(nn.Dropout(0.3))
+--model:add(nn.Dropout(0.3))
 model:add(cudnn.ReLU())
 -- 14x14
 model:add(cudnn.SpatialConvolution(64, 256, 3,3, 1,1))
 model:add(nn.SpatialBatchNormalization(256, 1e-3))
-model:add(nn.Dropout(0.4))
+--model:add(nn.Dropout(0.4))
 model:add(cudnn.ReLU())
 model:add(cudnn.SpatialConvolution(256, 256, 1,1, 1,1))
 model:add(nn.SpatialBatchNormalization(256, 1e-3))
-model:add(nn.Dropout(0.5))
+--model:add(nn.Dropout(0.5))
 model:add(cudnn.ReLU())
 model:add(cudnn.SpatialConvolution(256, 256, 3,3, 2,2))
 model:add(nn.SpatialBatchNormalization(256, 1e-3))
@@ -114,7 +114,7 @@ TrainHelpers.trainForever(
    trainSet,
    validSampler,
    validSet,
-   "snapshots-kanjinet/KanjiNet-allconv-small-20150626",
+   "snapshots-kanjinet/KanjiNet-allconv-small-nodropout-20150626",
    true, -- useCuda
    false, -- useTenCrops
    5 -- epochDropCount
