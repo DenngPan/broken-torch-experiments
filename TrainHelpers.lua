@@ -207,7 +207,7 @@ function TrainHelpers.normalizePreprocessDataset(dataset, rawScale)
 end
 
 
-function TrainHelpers.evaluateModel(model, epoch, cuda)
+function TrainHelpers.evaluateModel(model, epoch, cuda, useTenCrops)
    -- Evaluate the model and report accuracy
    print "Evaluating model..."
    local total = 0
@@ -227,9 +227,11 @@ function TrainHelpers.evaluateModel(model, epoch, cuda)
       end
       local outputs = model:forward(inputs):float()
       -- Take the average of all ten crops
-      assert(outputs:size(1) % 10 == 0, "Uh oh -- number of crops is not divisible by 10.")
-      outputs = outputs:view(outputs:size(1)/10, 10, outputs:size(2)):mean(2):select(2,1)
-      targets = targets:view(targets:size(1)/10, 10):select(2,1):clone()
+      if useTenCrops then
+          assert(outputs:size(1) % 10 == 0, "Uh oh -- number of crops is not divisible by 10.")
+          outputs = outputs:view(outputs:size(1)/10, 10, outputs:size(2)):mean(2):select(2,1)
+          targets = targets:view(targets:size(1)/10, 10):select(2,1):clone()
+      end
       local _, indices = torch.sort(outputs, 2, true)
       -- indices has shape (batchSize, nClasses)
       local top1 = indices:select(2, 1)
@@ -248,7 +250,9 @@ function TrainHelpers.evaluateModel(model, epoch, cuda)
 end
 
 
-function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename)
+function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename, useCuda, useTenCrops)
+   if useCuda == nil then useCuda = true end
+   if useTenCrops == nil then useTenCrops = true end
    while true do -- Each epoch
       sgdState.epochCounter = sgdState.epochCounter + 1
       local epoch = sampler:sampleEpoch(ds_train)
@@ -292,7 +296,7 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
       -- Evaluate model
       table.insert(sgdState.accuracyLog, {
           epochCounter = sgdState.epochCounter,
-          results = TrainHelpers.evaluateModel(model, val_sampler:sampleEpoch(ds_val), true)
+          results = TrainHelpers.evaluateModel(model, val_sampler:sampleEpoch(ds_val), useCuda, useTenCrops)
       })
    end
 end

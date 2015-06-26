@@ -67,7 +67,7 @@ sampler = dp.RandomSampler{
     ppf = preprocess
 }
 validSampler = dp.RandomSampler{
-    batch_size = 12,
+    batch_size = 64,
     ppf = preprocess
 }
 trainSet:multithread(4)
@@ -99,19 +99,21 @@ sgdState = {
    dampening    = 0,
    weightDecay  = 0.0005,
    nesterov     = true,
-   epochCounter = 1,
+   epochCounter = 0,
    lossLog = {},
    accuracyLog = {}
 }
 
-TrainHelpers.trainForever(
-   model,
-   forwardBackwardBatch,
-   weights,
-   sgdState,
-   sampler,
-   trainSet,
-   validSampler,
-   validSet,
-   "snapshots/KanjiNet-allconv-20150626"
-)
+-- TrainHelpers.trainForever(
+--    model,
+--    forwardBackwardBatch,
+--    weights,
+--    sgdState,
+--    sampler,
+--    trainSet,
+--    validSampler,
+--    validSet,
+--    "snapshots-kanjinet/KanjiNet-allconv-20150626",
+--    true, -- useCuda
+--    false -- useTenCrops
+-- )
