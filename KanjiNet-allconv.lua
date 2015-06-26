@@ -21,26 +21,26 @@ model = nn.Sequential()
 
 model:add(nn.Narrow(2,1,1)) -- Convert RGB to grayscale
 model:add(nn.SpatialConvolution(1, 64, 7,7, 2,2))
-model:add(nn.SpatialBatchNormalization(64, 1e-3)
+model:add(nn.SpatialBatchNormalization(64, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(64, 64, 1,1, 1,1))
-model:add(nn.SpatialBatchNormalization(64, 1e-3)
+model:add(nn.SpatialBatchNormalization(64, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(64, 64, 3,3, 1,1))
-model:add(nn.SpatialBatchNormalization(64, 1e-3)
+model:add(nn.SpatialBatchNormalization(64, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(64, 256, 3,3, 2,2))
-model:add(nn.SpatialBatchNormalization(256, 1e-3)
+model:add(nn.SpatialBatchNormalization(256, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(256, 256, 1,1, 1,1))
-model:add(nn.SpatialBatchNormalization(256, 1e-3)
+model:add(nn.SpatialBatchNormalization(256, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(256, 256, 3,3, 1,1))
-model:add(nn.SpatialBatchNormalization(256, 1e-3)
+model:add(nn.SpatialBatchNormalization(256, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.Dropout(0.5))
 model:add(nn.SpatialConvolution(256, 512, 3,3, 2,2))
-model:add(nn.SpatialBatchNormalization(512, 1e-3)
+model:add(nn.SpatialBatchNormalization(512, 1e-3))
 model:add(nn.ReLU())
 model:add(nn.SpatialConvolution(512, 512, 1,1, 1,1))
 model:add(nn.ReLU())
@@ -111,5 +111,5 @@ TrainHelpers.trainForever(
    ds_train,
    val_sampler,
    ds_val,
-   "snapshots/KanjiNet-allconv-20150626",
+   "snapshots/KanjiNet-allconv-20150626"
 )
