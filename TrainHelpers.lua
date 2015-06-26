@@ -250,9 +250,10 @@ function TrainHelpers.evaluateModel(model, epoch, cuda, useTenCrops)
 end
 
 
-function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename, useCuda, useTenCrops)
+function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdState, sampler, ds_train, val_sampler, ds_val, filename, useCuda, useTenCrops, epochDropCount)
    if useCuda == nil then useCuda = true end
    if useTenCrops == nil then useTenCrops = true end
+   if epochDropCount == nil then epochDropCount = 20 end
    while true do -- Each epoch
       sgdState.epochCounter = sgdState.epochCounter + 1
       local epoch = sampler:sampleEpoch(ds_train)
@@ -282,7 +283,7 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
       end
       -- Epoch completed!
       -- Every so often, decrease learning rate
-      if sgdState.epochCounter % 20 == 0 then
+      if sgdState.epochCounter % epochDropCount == 0 then
           sgdState.learningRate = sgdState.learningRate * 0.1
           print("Dropped learning rate, sgdState = ", sgdState)
       end

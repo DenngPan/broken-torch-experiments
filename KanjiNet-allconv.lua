@@ -104,16 +104,17 @@ sgdState = {
    accuracyLog = {}
 }
 
--- TrainHelpers.trainForever(
---    model,
---    forwardBackwardBatch,
---    weights,
---    sgdState,
---    sampler,
---    trainSet,
---    validSampler,
---    validSet,
---    "snapshots-kanjinet/KanjiNet-allconv-20150626",
---    true, -- useCuda
---    false -- useTenCrops
--- )
+TrainHelpers.trainForever(
+   model,
+   forwardBackwardBatch,
+   weights,
+   sgdState,
+   sampler,
+   trainSet,
+   validSampler,
+   validSet,
+   "snapshots-kanjinet/KanjiNet-allconv-20150626",
+   true, -- useCuda
+   false, -- useTenCrops
+   5 -- epochDropCount
+)
