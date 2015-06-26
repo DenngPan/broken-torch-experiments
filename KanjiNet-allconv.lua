@@ -63,17 +63,17 @@ trainSet, validSet = ETLKanjiSet.load_8g(
 preprocess = TrainHelpers.normalizePreprocessDataset(trainSet, 255)
 
 sampler = dp.RandomSampler{
-    batch_size = 128,
+    batch_size = 64,
     ppf = preprocess
 }
-val_sampler = dp.RandomSampler{
+validSampler = dp.RandomSampler{
     batch_size = 12,
     ppf = preprocess
 }
-ds_train:multithread(4)
-ds_val:multithread(4)
+trainSet:multithread(4)
+validSet:multithread(4)
 sampler:async()
-val_sampler:async()
+validSampler:async()
 
 ------------ Actual Training ------------
 
@@ -110,8 +110,8 @@ TrainHelpers.trainForever(
    weights,
    sgdState,
    sampler,
-   ds_train,
-   val_sampler,
-   ds_val,
+   trainSet,
+   validSampler,
+   validSet,
    "snapshots/KanjiNet-allconv-20150626"
 )
