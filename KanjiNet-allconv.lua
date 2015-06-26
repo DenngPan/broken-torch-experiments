@@ -57,7 +57,9 @@ loss = nn.ClassNLLCriterion()
 loss:cuda()
 
 ------------- Dataset -------------
-trainSet, validSet = ETLKanjiSet.load_8g("/Users/michael/ETL-kanji-datasets")
+trainSet, validSet = ETLKanjiSet.load_8g(
+   paths.concat(dp.DATA_DIR, 'ETL-kanji-datasets')
+)
 preprocess = TrainHelpers.normalizePreprocessDataset(trainSet, 255)
 
 sampler = dp.RandomSampler{
