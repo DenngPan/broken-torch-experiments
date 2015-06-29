@@ -22,6 +22,25 @@ function ETLKanjiSet.load_8g(path)
    return trainSet, validSet
 end
 
+function ETLKanjiSet.load_9g(path)
+   local trainSet = dp.ImageClassSet{
+      data_path = path.."/data-9g-train/",
+      load_size = {3, 0,0}, -- Not used
+      sample_size = {3, 64,64},
+      sample_func = ETLKanjiSet.sampleTrain,
+      which_set = 'train',
+   }
+   local validSet = dp.ImageClassSet{
+      data_path = path.."/data-9g-valid/",
+      load_size = {3, 0,0}, -- Not used
+      sample_size = {3, 64,64},
+      sample_func = ETLKanjiSet.sampleValid,
+      which_set = 'train',
+   }
+
+   return trainSet, validSet
+end
+
 function ETLKanjiSet.sampleTrain(self, dst, path)
    -- Load the image into 'path' while applying the following
    -- transformations:

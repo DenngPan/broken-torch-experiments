@@ -255,6 +255,7 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
    if useCuda == nil then useCuda = true end
    if useTenCrops == nil then useTenCrops = true end
    if epochDropCount == nil then epochDropCount = 20 end
+   local modelTag = torch.random()
    while true do -- Each epoch
       sgdState.epochCounter = sgdState.epochCounter + 1
       local epoch = sampler:sampleEpoch(ds_train)
@@ -291,10 +292,14 @@ function TrainHelpers.trainForever(model, forwardBackwardBatch, weights, sgdStat
       end
       -- Snapshot model.
       if filename then
-          torch.save(filename.."-epoch"..sgdState.epochCounter..".t7", {
-              modelWeights = weights,
+          torch.save(filename.."-latest.t7.tmp", { --epoch"..sgdState.epochCounter..".t7", {
+              -- I would love to be able to just save the weights and be done
+              -- with it, but I can't because Batch Norm layers require extra
+              -- fields.
+              model = model,
               sgdState = sgdState,
           })
+          os.rename(filename.."-latest.t7.tmp", filename.."-latest-"..modelTag..".t7") -- POSIX guarantees automicity
       end
       -- Evaluate model
       table.insert(sgdState.accuracyLog, {
