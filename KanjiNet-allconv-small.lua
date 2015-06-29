@@ -109,7 +109,7 @@ TrainHelpers.trainForever(
    trainSet,
    validSampler,
    validSet,
-   "snapshots-kanjinet/KanjiNet-allconv-small-nodropout-20150626",
+   "snapshots-kanjinet-8g/KanjiNet-allconv-small-nodropout-20150626",
    true, -- useCuda
    false, -- useTenCrops
    5 -- epochDropCount
